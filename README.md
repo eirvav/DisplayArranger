@@ -23,7 +23,7 @@ It’s useful when you frequently connect and disconnect an iPad and want to qui
 
 ## Requirements
 
-- macOS
+- macOS 13.0+
 - Exactly two connected displays (including Sidecar)
 
 ## Status
