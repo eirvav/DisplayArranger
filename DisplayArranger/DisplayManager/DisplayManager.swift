@@ -8,6 +8,11 @@
 import Foundation
 import CoreGraphics
 
+struct DisplayLayoutSnapshot {
+    let primarySize: CGSize
+    let externalSize: CGSize
+    let placement: DisplayPlacement
+}
 
 class DisplayManager {
     /**
@@ -16,16 +21,11 @@ class DisplayManager {
      * @param placement The desired relative position (.left, .right, .above, or .below).
      */
     func place(_ placement: DisplayPlacement) {
-        let displays = activeDisplays()
-        guard displays.count >= 2 else {
+        guard let (primary, external) = primaryAndExternalDisplay() else {
             print("Only one display found. Cant arrange")
             return
         }
-        
-        // The first display in the list is usually the primary display
-        let primary = displays[0]
-        let external = displays[1]
-        
+
         let primaryBounds = CGDisplayBounds(primary)
         let externalBounds = CGDisplayBounds(external)
         
@@ -80,6 +80,25 @@ class DisplayManager {
             CGCompleteDisplayConfiguration(config, .forAppOnly)
         }
     }
+
+    func currentPlacement() -> DisplayPlacement? {
+        currentLayout()?.placement
+    }
+
+    func currentLayout() -> DisplayLayoutSnapshot? {
+        guard let (primary, external) = primaryAndExternalDisplay() else {
+            return nil
+        }
+
+        let primaryBounds = CGDisplayBounds(primary)
+        let externalBounds = CGDisplayBounds(external)
+
+        return DisplayLayoutSnapshot(
+            primarySize: primaryBounds.size,
+            externalSize: externalBounds.size,
+            placement: placement(for: primaryBounds, externalBounds: externalBounds)
+        )
+    }
     
     /**
      * Gets a list of all currently active (on and connected) displays.
@@ -98,5 +117,28 @@ class DisplayManager {
         CGGetActiveDisplayList(count, &list, &count)
         
         return list
+    }
+
+    private func primaryAndExternalDisplay() -> (CGDirectDisplayID, CGDirectDisplayID)? {
+        let displays = activeDisplays()
+        guard displays.count >= 2 else { return nil }
+
+        let primary = CGMainDisplayID()
+        if let external = displays.first(where: { $0 != primary }) {
+            return (primary, external)
+        }
+
+        return nil
+    }
+
+    private func placement(for primaryBounds: CGRect, externalBounds: CGRect) -> DisplayPlacement {
+        let dx = externalBounds.midX - primaryBounds.midX
+        let dy = externalBounds.midY - primaryBounds.midY
+
+        if abs(dx) >= abs(dy) {
+            return dx >= 0 ? .right : .left
+        }
+
+        return dy >= 0 ? .below : .above
     }
 }

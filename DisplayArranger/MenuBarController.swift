@@ -6,108 +6,80 @@
 //
 import AppKit
 import ServiceManagement
+import SwiftUI
 
-class MenuBarController: NSObject {
+class MenuBarController: NSObject, ObservableObject {
     let displayManager = DisplayManager()
-    
-    func buildMenu() -> NSMenu {
-        let menu = NSMenu()
-        
-        // LEFT
-        let leftItem = NSMenuItem(
-            title: "Place screen to the left",
-            action: #selector(placeLeft),
-            keyEquivalent: ""
-        )
-        leftItem.target = self
-        menu.addItem(leftItem)
-        
-        // RIGHT
-        let rightItem = NSMenuItem(
-            title: "Place screen to the right",
-            action: #selector(placeRight),
-            keyEquivalent: ""
-        )
-        rightItem.target = self
-        menu.addItem(rightItem)
-        
-        // ABOVE
-        let aboveItem = NSMenuItem(
-            title: "Place screen above",
-            action: #selector(placeAbove),
-            keyEquivalent: ""
-        )
-        aboveItem.target = self
-        menu.addItem(aboveItem)
-        
-        // BELOW
-        let belowItem = NSMenuItem(
-            title: "Place screen below",
-            action: #selector(placeBelow),
-            keyEquivalent: ""
-        )
-        belowItem.target = self
-        menu.addItem(belowItem)
-        
-        // Separator
-        menu.addItem(NSMenuItem.separator())
-        
-        // RUN AT STARTUP
-        let startupItem = NSMenuItem(
-            title: "Run at startup",
-            action: #selector(toggleStartup),
-            keyEquivalent: ""
-        )
-        startupItem.target = self
-        startupItem.state = isLaunchAtStartupEnabled() ? .on : .off
-        menu.addItem(startupItem)
-        
-        // QUIT
-        let quitItem = NSMenuItem(
-            title: "Quit",
-            action: #selector(quit),
-            keyEquivalent: "q"
-        )
-        quitItem.target = self
-        menu.addItem(quitItem)
-        
-        return menu
+    @Published private(set) var launchAtStartupEnabled = false
+
+    private let popover = NSPopover()
+    private weak var statusButton: NSStatusBarButton?
+
+    override init() {
+        super.init()
+        launchAtStartupEnabled = isLaunchAtStartupEnabled()
     }
-    
-    // MARK: - Actions
-    
-    @objc func placeLeft() {
-        displayManager.place(.left)
+
+    func configureStatusItem(_ statusItem: NSStatusItem) {
+        guard let button = statusItem.button else { return }
+
+        statusButton = button
+        button.target = self
+        button.action = #selector(togglePopover(_:))
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+
+        popover.behavior = .transient
+        popover.animates = true
+        popover.contentSize = NSSize(width: 560, height: 390)
+        popover.contentViewController = NSHostingController(
+            rootView: ArrangeDisplaysPopoverView(controller: self)
+        )
     }
-    
-    @objc func placeRight() {
-        displayManager.place(.right)
-    }
-    
-    @objc func placeAbove() {
-        displayManager.place(.above)
-    }
-    
-    @objc func placeBelow() {
-        displayManager.place(.below)
-    }
-    
-    @objc func toggleStartup(_ sender: NSMenuItem) {
-        if isLaunchAtStartupEnabled() {
-            disableLaunchAtStartup()
-            sender.state = .off
-        } else {
-            enableLaunchAtStartup()
-            sender.state = .on
+
+    @objc private func togglePopover(_ sender: AnyObject?) {
+        if popover.isShown {
+            popover.performClose(sender)
+            return
         }
+
+        launchAtStartupEnabled = isLaunchAtStartupEnabled()
+
+        guard let button = statusButton else { return }
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
     }
-    
-    @objc func quit() {
+
+    func closePopover() {
+        popover.performClose(nil)
+    }
+
+    func place(_ placement: DisplayPlacement) {
+        displayManager.place(placement)
+    }
+
+    func currentPlacement() -> DisplayPlacement {
+        displayManager.currentPlacement() ?? .below
+    }
+
+    func currentLayout() -> DisplayLayoutSnapshot? {
+        displayManager.currentLayout()
+    }
+
+    func setLaunchAtStartup(enabled: Bool) {
+        if enabled {
+            enableLaunchAtStartup()
+        } else {
+            disableLaunchAtStartup()
+        }
+
+        launchAtStartupEnabled = isLaunchAtStartupEnabled()
+    }
+
+    func quit() {
         NSApplication.shared.terminate(nil)
     }
-    
+
     // MARK: - Launch at startup helpers
-    
+
     private func isLaunchAtStartupEnabled() -> Bool {
         if #available(macOS 13.0, *) {
             return SMAppService.mainApp.status == .enabled
@@ -121,9 +93,9 @@ class MenuBarController: NSObject {
         if #available(macOS 13.0, *) {
             do {
                 try SMAppService.mainApp.register()
-                print("✅ Launch at startup enabled")
+                log("Launch at startup enabled")
             } catch {
-                print("❌ Failed to enable launch at startup: \(error)")
+                log("Failed to enable launch at startup: \(error)")
             }
         } else {
             // Fallback for older macOS versions
@@ -135,9 +107,9 @@ class MenuBarController: NSObject {
         if #available(macOS 13.0, *) {
             do {
                 try SMAppService.mainApp.unregister()
-                print("Launch at startup disabled")
+                log("Launch at startup disabled")
             } catch {
-                print("Failed to disable launch: \(error)")
+                log("Failed to disable launch: \(error)")
             }
         } else {
             // Fallback for older macOS versions

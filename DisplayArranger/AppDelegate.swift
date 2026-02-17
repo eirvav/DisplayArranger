@@ -23,8 +23,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             button.image = NSImage(systemSymbolName: "inset.filled.topleft.topright.bottomleft.bottomright.rectangle", accessibilityDescription: "Display Arranger")
             button.image?.isTemplate = true // Adapts to light/darkmode
         }
-        
-        statusItem.menu = menuController.buildMenu()
+
+        menuController.configureStatusItem(statusItem)
 
         // Observer for screenchanges
         NotificationCenter.default.addObserver(
